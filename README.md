@@ -1,2 +1,2 @@
-# subleq-debugger
-An emulator/debugger of the custom SUBLEQ hardware to aid in the development of other projects. Written in Rust.
+# noontide-emu
+An emulator/debugger of the Noontide SUBLEQ Computer to aid in the development of related projects. Written in Rust.
