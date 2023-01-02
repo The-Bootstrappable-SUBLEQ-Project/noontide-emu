@@ -1,45 +1,32 @@
-use std::cell::UnsafeCell;
-use std::env;
-use std::fs;
-use std::sync::Arc;
-use std::thread;
-use std::time;
+use std::{cell::UnsafeCell, sync::Arc};
+
+pub struct SyncUnsafeCell<T: ?Sized>(pub UnsafeCell<T>);
+
+unsafe impl<T: ?Sized> Sync for SyncUnsafeCell<T> {}
 
 fn main() {
-    let args: Vec<String> = env::args().collect();
+    let mut mem = vec![0u8; 0x14000000];
+    let data = std::fs::read(std::env::args().nth(1).unwrap()).unwrap();
+    mem[..data.len()].copy_from_slice(&data);
 
-    let file_path = &args[1];
-    let mut mem = fs::read(file_path).unwrap();
-    mem.resize(0x14000000, 0);
-
-    let arc = Arc::new(UnsafeCell::new(mem));
+    let arc = Arc::new(SyncUnsafeCell(UnsafeCell::new(mem)));
 
     {
         let arc = Arc::clone(&arc);
-        let handle = thread::Builder::new()
-            .name("CPU 0".to_string())
-            .spawn(move || cpu_loop(arc))
-            .unwrap();
-        handle.join().unwrap();
+        std::thread::spawn(move || cpu_loop(arc)).join().unwrap();
     }
 }
 
-fn read_mem(mem: &[u8], offset: usize, len: usize) -> u64 {
-    assert!(len <= 8);
-    let mut ret: u64 = 0;
-    for i in 0..len {
-        ret *= 256;
-        ret += mem[offset + i] as u64;
-    }
-
-    ret
+fn read_mem(mem: &[u8], offset: usize) -> i64 {
+    i64::from_be_bytes(mem[offset..offset + 8].try_into().unwrap())
 }
 
-fn cpu_loop(mem: Arc<UnsafeCell<Vec<u8>>>) {
+fn cpu_loop(mem: Arc<SyncUnsafeCell<Vec<u8>>>) {
     let mut eip = 0;
     loop {
-        //let A = read_mem(&mem, eip, 8);
-        thread::sleep(time::Duration::from_millis(1000));
-        println!("Hello, world!");
+        let b = read_mem(unsafe { mem.0.get().as_mut().unwrap() }, eip);
+        println!("{b:#X}");
+        eip += 8;
+        std::thread::sleep(std::time::Duration::from_millis(1000));
     }
 }
