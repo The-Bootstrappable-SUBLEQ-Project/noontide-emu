@@ -1,5 +1,7 @@
 use std::{cell::UnsafeCell, sync::Arc};
 
+use pancurses::{Input::Character, Window};
+
 pub struct SyncUnsafeCell<T: ?Sized>(pub UnsafeCell<T>);
 
 // Allows accessing the UnsafeCell without the .0
@@ -26,6 +28,16 @@ fn main() {
 
     let mut handles = vec![];
     let arc = Arc::new(SyncUnsafeCell(UnsafeCell::new(mem)));
+
+    {
+        let arc = Arc::clone(&arc);
+        handles.push(
+            std::thread::Builder::new()
+                .name("Serial".to_string())
+                .spawn(move || serial_loop(arc))
+                .unwrap(),
+        );
+    }
 
     {
         let arc = Arc::clone(&arc);
@@ -60,7 +72,7 @@ fn cpu_loop(mem: Arc<SyncUnsafeCell<Vec<u8>>>) {
         let mut a_val = read_mem(unsafe { mem.get().as_mut().unwrap() }, a_addr as usize);
         let b_val = read_mem(unsafe { mem.get().as_mut().unwrap() }, b_addr as usize);
 
-        println!("{eip:#X} {a_addr:#X}({a_val:#X}) {b_addr:#X}({b_val:#X}) {c_addr:#X}");
+        print!("{eip:#X} {a_addr:#X}({a_val:#X}) {b_addr:#X}({b_val:#X}) {c_addr:#X}\r\n");
 
         a_val -= b_val;
         write_mem(
@@ -74,6 +86,46 @@ fn cpu_loop(mem: Arc<SyncUnsafeCell<Vec<u8>>>) {
             eip += 24;
         }
 
-        std::thread::sleep(std::time::Duration::from_millis(1000));
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+}
+
+fn kbhit(window: &Window) -> bool {
+    let ch = window.getch();
+
+    if let Some(ch) = ch {
+        window.ungetch(&ch);
+        true
+    } else {
+        false
+    }
+}
+
+const SERIAL_CONNECTED: usize = 0x13ED27E0;
+const SERIAL_IN: usize = 0x13ED27E8;
+fn serial_loop(mem: Arc<SyncUnsafeCell<Vec<u8>>>) {
+    // https://stackoverflow.com/a/27335584
+    let window = pancurses::initscr();
+    window.nodelay(true);
+
+    write_mem(
+        unsafe { mem.get().as_mut().unwrap() },
+        SERIAL_CONNECTED,
+        &i64::to_be_bytes(1),
+    );
+
+    loop {
+        if read_mem(unsafe { mem.get().as_mut().unwrap() }, SERIAL_IN) == 0 && kbhit(&window) {
+            let input = window.getch().unwrap();
+            if let Character(input) = input {
+                write_mem(
+                    unsafe { mem.get().as_mut().unwrap() },
+                    SERIAL_IN,
+                    &i64::to_be_bytes(input as i64 + 1),
+                );
+            }
+        }
+
+        std::thread::sleep(std::time::Duration::from_millis(1));
     }
 }
