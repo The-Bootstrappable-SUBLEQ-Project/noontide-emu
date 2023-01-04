@@ -1,138 +1,190 @@
-use std::{cell::UnsafeCell, sync::Arc};
+use std::sync::Arc;
 
-use pancurses::{Input::Character, Window};
+use crossterm::event::{Event, KeyCode, KeyModifiers, MouseEventKind};
+use tui::{layout::*, text::Text, widgets::*};
 
-pub struct SyncUnsafeCell<T: ?Sized>(pub UnsafeCell<T>);
+use sync_unsafe_cell::*;
 
-// Allows accessing the UnsafeCell without the .0
-impl<T: ?Sized> core::ops::Deref for SyncUnsafeCell<T> {
-    type Target = UnsafeCell<T>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl<T: ?Sized> core::ops::DerefMut for SyncUnsafeCell<T> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-unsafe impl<T: ?Sized> Sync for SyncUnsafeCell<T> {}
+mod cpu;
+mod mem;
+mod msg;
+mod serial;
+mod sync_unsafe_cell;
 
 fn main() {
+    let original_hook = std::panic::take_hook();
+
+    std::panic::set_hook(Box::new(move |panic| {
+        crossterm::terminal::disable_raw_mode().unwrap();
+        crossterm::execute!(
+            std::io::stdout(),
+            crossterm::terminal::LeaveAlternateScreen,
+            crossterm::event::DisableMouseCapture,
+            crossterm::event::DisableBracketedPaste
+        )
+        .unwrap();
+        original_hook(panic);
+    }));
+
+    crossterm::terminal::enable_raw_mode().unwrap();
+    let mut stdout = std::io::stdout();
+    crossterm::execute!(
+        stdout,
+        crossterm::terminal::EnterAlternateScreen,
+        crossterm::event::EnableMouseCapture,
+        crossterm::event::EnableBracketedPaste
+    )
+    .unwrap();
+    let backend = tui::backend::CrosstermBackend::new(stdout);
+    let mut terminal = tui::Terminal::new(backend).unwrap();
+    terminal.show_cursor().unwrap();
+
     let mut mem = vec![0u8; 0x14000000];
     let data = std::fs::read(std::env::args().nth(1).unwrap()).unwrap();
     mem[..data.len()].copy_from_slice(&data);
 
     let mut handles = vec![];
-    let arc = Arc::new(SyncUnsafeCell(UnsafeCell::new(mem)));
+    let arc = Arc::new(SyncUnsafeCell::new(mem));
+    let (sender, receiver) = std::sync::mpsc::channel();
+    let (serial_sender, serial_receiver) = std::sync::mpsc::channel();
 
     {
-        let arc = Arc::clone(&arc);
-        handles.push(
-            std::thread::Builder::new()
-                .name("Serial".to_string())
-                .spawn(move || serial_loop(arc))
-                .unwrap(),
-        );
+        let mem = Arc::clone(&arc);
+        let sender = sender.clone();
+        handles.push(std::thread::spawn(move || {
+            serial::serial_loop(
+                unsafe { mem.get().as_mut().unwrap() },
+                sender,
+                serial_receiver,
+            )
+        }));
     }
 
-    {
-        let arc = Arc::clone(&arc);
-        handles.push(
-            std::thread::Builder::new()
-                .name("CPU 0".to_string())
-                .spawn(move || cpu_loop(arc))
-                .unwrap(),
-        );
-    }
+    let mem = Arc::clone(&arc);
+    handles.push(std::thread::spawn(move || {
+        cpu::cpu_loop(unsafe { mem.get().as_mut().unwrap() }, sender)
+    }));
 
-    for handle in handles {
-        handle.join().unwrap();
-    }
-}
+    let mut serial_out = String::new();
+    let mut debug_out = String::new();
 
-fn read_mem(mem: &[u8], offset: usize) -> i64 {
-    i64::from_be_bytes(mem[offset..offset + 8].try_into().unwrap())
-}
+    let mut scroll = (0, 0);
+    let mut previous_char = '\0';
 
-fn write_mem(mem: &mut [u8], offset: usize, data: &[u8; 8]) {
-    mem[offset..offset + 8].clone_from_slice(data);
-}
-
-fn cpu_loop(mem: Arc<SyncUnsafeCell<Vec<u8>>>) {
-    let mut eip: i64 = 0;
-    loop {
-        let a_addr = read_mem(unsafe { mem.get().as_mut().unwrap() }, eip as usize);
-        let b_addr = read_mem(unsafe { mem.get().as_mut().unwrap() }, (eip + 8) as usize);
-        let c_addr = read_mem(unsafe { mem.get().as_mut().unwrap() }, (eip + 16) as usize);
-
-        let mut a_val = read_mem(unsafe { mem.get().as_mut().unwrap() }, a_addr as usize);
-        let b_val = read_mem(unsafe { mem.get().as_mut().unwrap() }, b_addr as usize);
-
-        print!("{eip:#X} {a_addr:#X}({a_val:#X}) {b_addr:#X}({b_val:#X}) {c_addr:#X}\r\n");
-
-        a_val -= b_val;
-        write_mem(
-            unsafe { mem.get().as_mut().unwrap() },
-            a_addr as usize,
-            &i64::to_be_bytes(a_val),
-        );
-        if a_val <= 0 {
-            eip = c_addr;
-        } else {
-            eip += 24;
-        }
-
-        std::thread::sleep(std::time::Duration::from_millis(100));
-    }
-}
-
-fn kbhit(window: &Window) -> bool {
-    let ch = window.getch();
-
-    if let Some(ch) = ch {
-        window.ungetch(&ch);
-        true
-    } else {
-        false
-    }
-}
-
-const SERIAL_CONNECTED: usize = 0x13ED27E0;
-const SERIAL_IN: usize = 0x13ED27E8;
-const SERIAL_OUT: usize = 0x13ED27F0;
-fn serial_loop(mem: Arc<SyncUnsafeCell<Vec<u8>>>) {
-    // https://stackoverflow.com/a/27335584
-    let window = pancurses::initscr();
-    window.nodelay(true);
-
-    write_mem(
-        unsafe { mem.get().as_mut().unwrap() },
-        SERIAL_CONNECTED,
-        &i64::to_be_bytes(1),
-    );
-
-    loop {
-        if read_mem(unsafe { mem.get().as_mut().unwrap() }, SERIAL_IN) == 0 && kbhit(&window) {
-            let input = window.getch().unwrap();
-            if let Character(input) = input {
-                write_mem(
-                    unsafe { mem.get().as_mut().unwrap() },
-                    SERIAL_IN,
-                    &i64::to_be_bytes(input as i64 + 1),
-                );
+    'main: loop {
+        while let Ok(msg) = receiver.try_recv() {
+            match msg {
+                msg::UIMessage::Serial(c) => {
+                    serial_out.push(c);
+                }
+                msg::UIMessage::Debug(s) => {
+                    debug_out.push_str(&s);
+                }
             }
         }
 
-        let out = read_mem(unsafe { mem.get().as_mut().unwrap() }, SERIAL_OUT);
-        if out != 0 {
-            window.printw(&(out as char).to_string());
-            write_mem(unsafe { mem.get().as_mut().unwrap() }, SERIAL_OUT, &i64::to_be_bytes(0));
+        {
+            let serial_out = serial_out.clone();
+            let debug_out = debug_out.clone();
+            terminal
+                .draw(move |f| {
+                    let chunks = Layout::default()
+                        .constraints([Constraint::Percentage(70), Constraint::Percentage(30)])
+                        .split(f.size());
+
+                    let block = Block::default().title("Serial").borders(Borders::ALL);
+                    f.render_widget(block, chunks[0]);
+                    let p = Paragraph::new(Text::from(serial_out)).wrap(Wrap { trim: false });
+                    f.render_widget(
+                        p,
+                        chunks[0].inner(&Margin {
+                            horizontal: 1,
+                            vertical: 1,
+                        }),
+                    );
+
+                    let block = Block::default().title("Debug").borders(Borders::ALL);
+                    f.render_widget(block, chunks[1]);
+                    let p = Paragraph::new(Text::from(debug_out))
+                        .wrap(Wrap { trim: false })
+                        .scroll(scroll);
+                    f.render_widget(
+                        p,
+                        chunks[1].inner(&Margin {
+                            horizontal: 1,
+                            vertical: 1,
+                        }),
+                    );
+                })
+                .unwrap();
         }
 
-        std::thread::sleep(std::time::Duration::from_millis(1));
+        while crossterm::event::poll(std::time::Duration::from_millis(10)).unwrap() {
+            match crossterm::event::read().unwrap() {
+                Event::Key(key) => match key.code {
+                    KeyCode::Esc | KeyCode::Char('c')
+                        if key.modifiers.contains(KeyModifiers::CONTROL) =>
+                    {
+                        break 'main;
+                    }
+                    KeyCode::Left => {
+                        scroll.1 -= 1;
+                    }
+                    KeyCode::Right => {
+                        scroll.1 += 1;
+                    }
+                    KeyCode::Up => {
+                        scroll.0 -= 1;
+                    }
+                    KeyCode::Down => {
+                        scroll.0 += 1;
+                    }
+                    KeyCode::Enter => {
+                        serial_out.push_str("\r\n");
+                        serial_sender.send('\r').unwrap();
+                        serial_sender.send('\n').unwrap();
+                    }
+                    KeyCode::Char(c) => {
+                        if c == '\n' && previous_char != '\r' {
+                            serial_out.push('\r');
+                            serial_sender.send('\r').unwrap();
+                        }
+                        serial_out.push(c);
+                        serial_sender.send(c).unwrap();
+                        previous_char = c;
+                    }
+                    _ => {}
+                },
+                Event::Paste(s) => {
+                    for c in s.chars() {
+                        if c == '\n' && previous_char != '\r' {
+                            serial_out.push('\r');
+                            serial_sender.send('\r').unwrap();
+                        }
+                        serial_out.push(c);
+                        serial_sender.send(c).unwrap();
+                        previous_char = c;
+                    }
+                }
+                Event::Mouse(e) => {
+                    if let MouseEventKind::ScrollUp = e.kind {
+                        scroll.0 -= 1;
+                    } else if let MouseEventKind::ScrollDown = e.kind {
+                        scroll.0 += 1;
+                    }
+                }
+                _ => {}
+            }
+        }
     }
+
+    crossterm::terminal::disable_raw_mode().unwrap();
+    crossterm::execute!(
+        terminal.backend_mut(),
+        crossterm::terminal::LeaveAlternateScreen,
+        crossterm::event::DisableMouseCapture,
+        crossterm::event::DisableBracketedPaste
+    )
+    .unwrap();
+    terminal.show_cursor().unwrap();
 }

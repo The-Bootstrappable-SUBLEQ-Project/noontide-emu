@@ -1,7 +1,10 @@
 [package]
 name = "noontide-emu"
 version = "0.1.0"
+publish = false
 edition = "2021"
 
 [dependencies]
-pancurses = "0.17.0"
+crossterm = "0.25.0"
+tui = "0.19.0"
+
