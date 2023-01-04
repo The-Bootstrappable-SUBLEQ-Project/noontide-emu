@@ -103,6 +103,7 @@ fn kbhit(window: &Window) -> bool {
 
 const SERIAL_CONNECTED: usize = 0x13ED27E0;
 const SERIAL_IN: usize = 0x13ED27E8;
+const SERIAL_OUT: usize = 0x13ED27F0;
 fn serial_loop(mem: Arc<SyncUnsafeCell<Vec<u8>>>) {
     // https://stackoverflow.com/a/27335584
     let window = pancurses::initscr();
@@ -124,6 +125,12 @@ fn serial_loop(mem: Arc<SyncUnsafeCell<Vec<u8>>>) {
                     &i64::to_be_bytes(input as i64 + 1),
                 );
             }
+        }
+
+        let out = read_mem(unsafe { mem.get().as_mut().unwrap() }, SERIAL_OUT);
+        if out != 0 {
+            window.printw(&(out as char).to_string());
+            write_mem(unsafe { mem.get().as_mut().unwrap() }, SERIAL_OUT, &i64::to_be_bytes(0));
         }
 
         std::thread::sleep(std::time::Duration::from_millis(1));
