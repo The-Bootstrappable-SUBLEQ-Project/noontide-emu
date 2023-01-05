@@ -17,7 +17,7 @@ pub fn serial_loop(mem: &mut [u8], sender: Sender<UIMessage>, receiver: Receiver
         let out = crate::mem::read(mem, SERIAL_OUT);
         if out != 0 {
             if sender
-                .send(UIMessage::Serial(char::from_u32(out as u32).unwrap()))
+                .send(UIMessage::Serial(char::from_u32((out - 1) as u32).unwrap()))
                 .is_err()
             {
                 break;
