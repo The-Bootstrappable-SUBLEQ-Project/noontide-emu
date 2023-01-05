@@ -11,6 +11,9 @@ pub fn serial_loop(mem: &mut [u8], sender: Sender<UIMessage>, receiver: Receiver
 
     loop {
         if let Ok(input) = receiver.try_recv() {
+            while crate::mem::read(mem, SERIAL_IN) != 0 {
+                std::thread::sleep(std::time::Duration::from_millis(1));
+            }
             crate::mem::write(mem, SERIAL_IN, &i64::to_be_bytes(input as i64 + 1));
         }
 

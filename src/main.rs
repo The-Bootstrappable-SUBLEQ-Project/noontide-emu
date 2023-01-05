@@ -20,7 +20,6 @@ fn main() {
             std::io::stdout(),
             crossterm::terminal::LeaveAlternateScreen,
             crossterm::event::DisableMouseCapture,
-            crossterm::event::DisableBracketedPaste
         )
         .unwrap();
         original_hook(panic);
@@ -32,7 +31,6 @@ fn main() {
         stdout,
         crossterm::terminal::EnterAlternateScreen,
         crossterm::event::EnableMouseCapture,
-        crossterm::event::EnableBracketedPaste
     )
     .unwrap();
     let backend = tui::backend::CrosstermBackend::new(stdout);
