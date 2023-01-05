@@ -157,17 +157,6 @@ fn main() {
                     }
                     _ => {}
                 },
-                Event::Paste(s) => {
-                    for c in s.chars() {
-                        if c == '\n' && previous_char != '\r' {
-                            serial_out.push('\r');
-                            serial_sender.send('\r').unwrap();
-                        }
-                        serial_out.push(c);
-                        serial_sender.send(c).unwrap();
-                        previous_char = c;
-                    }
-                }
                 Event::Mouse(e) => {
                     if let MouseEventKind::ScrollUp = e.kind {
                         if scroll.0 != 0 {
