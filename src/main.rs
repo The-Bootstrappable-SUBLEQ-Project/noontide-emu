@@ -128,13 +128,17 @@ fn main() {
                         break 'main;
                     }
                     KeyCode::Left => {
-                        scroll.1 -= 1;
+                        if scroll.1 != 0 {
+                            scroll.1 -= 1;
+                        }
                     }
                     KeyCode::Right => {
                         scroll.1 += 1;
                     }
                     KeyCode::Up => {
-                        scroll.0 -= 1;
+                        if scroll.0 != 0 {
+                            scroll.0 -= 1;
+                        }
                     }
                     KeyCode::Down => {
                         scroll.0 += 1;
@@ -168,7 +172,9 @@ fn main() {
                 }
                 Event::Mouse(e) => {
                     if let MouseEventKind::ScrollUp = e.kind {
-                        scroll.0 -= 1;
+                        if scroll.0 != 0 {
+                            scroll.0 -= 1;
+                        }
                     } else if let MouseEventKind::ScrollDown = e.kind {
                         scroll.0 += 1;
                     }
