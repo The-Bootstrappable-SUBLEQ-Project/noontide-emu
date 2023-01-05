@@ -142,16 +142,16 @@ fn main() {
                         scroll.0 += 1;
                     }
                     KeyCode::Enter => {
-                        serial_out.push_str("\r\n");
+                        // serial_out.push_str("\r\n");
                         serial_sender.send('\r').unwrap();
                         serial_sender.send('\n').unwrap();
                     }
                     KeyCode::Char(c) => {
                         if c == '\n' && previous_char != '\r' {
-                            serial_out.push('\r');
+                            // serial_out.push('\r');
                             serial_sender.send('\r').unwrap();
                         }
-                        serial_out.push(c);
+                        // serial_out.push(c);
                         serial_sender.send(c).unwrap();
                         previous_char = c;
                     }
