@@ -1,4 +1,7 @@
-use std::sync::Arc;
+use std::{
+    sync::{Arc, Barrier},
+    thread,
+};
 
 use crossterm::event::{Event, KeyCode, KeyModifiers, MouseEventKind};
 use tui::{layout::*, text::Text, widgets::*};
@@ -7,13 +10,13 @@ use sync_unsafe_cell::*;
 
 mod cpu;
 mod mem;
+mod motherboard;
 mod msg;
 mod serial;
 mod sync_unsafe_cell;
 
 fn main() {
     let original_hook = std::panic::take_hook();
-
     std::panic::set_hook(Box::new(move |panic| {
         crossterm::terminal::disable_raw_mode().unwrap();
         crossterm::execute!(
@@ -33,6 +36,7 @@ fn main() {
         crossterm::event::EnableMouseCapture,
     )
     .unwrap();
+
     let backend = tui::backend::CrosstermBackend::new(stdout);
     let mut terminal = tui::Terminal::new(backend).unwrap();
     terminal.show_cursor().unwrap();
@@ -42,26 +46,61 @@ fn main() {
     mem[..data.len()].copy_from_slice(&data);
 
     let mut handles = vec![];
-    let arc = Arc::new(SyncUnsafeCell::new(mem));
-    let (sender, receiver) = std::sync::mpsc::channel();
+    let mem_arc = Arc::new(SyncUnsafeCell::new(mem));
+    let io_barrier_arc = Arc::new(Barrier::new(2));
+    let cpu_barrier_arc = Arc::new(Barrier::new(2));
+
+    let (ui_sender, ui_receiver) = std::sync::mpsc::channel();
     let (serial_sender, serial_receiver) = std::sync::mpsc::channel();
 
     {
-        let mem = Arc::clone(&arc);
-        let sender = sender.clone();
-        handles.push(std::thread::spawn(move || {
-            serial::serial_loop(
-                unsafe { mem.get().as_mut().unwrap() },
-                sender,
-                serial_receiver,
-            )
-        }));
+        let mem = Arc::clone(&mem_arc);
+        let io_barrier = Arc::clone(&io_barrier_arc);
+        let sender = ui_sender.clone();
+        handles.push(
+            thread::Builder::new()
+                .name("Serial".to_string())
+                .spawn(move || {
+                    serial::serial_loop(
+                        unsafe { mem.get().as_mut().unwrap() },
+                        io_barrier,
+                        sender,
+                        serial_receiver,
+                    )
+                })
+                .unwrap(),
+        );
     }
 
-    let mem = Arc::clone(&arc);
-    handles.push(std::thread::spawn(move || {
-        cpu::cpu_loop(unsafe { mem.get().as_mut().unwrap() }, sender)
-    }));
+    {
+        let mem = Arc::clone(&mem_arc);
+        let cpu_barrier = Arc::clone(&cpu_barrier_arc);
+        handles.push(
+            thread::Builder::new()
+                .name("CPU 0".to_string())
+                .spawn(move || {
+                    cpu::cpu_loop(
+                        unsafe { mem.get().as_mut().unwrap() },
+                        cpu_barrier,
+                        ui_sender,
+                    )
+                })
+                .unwrap(),
+        );
+    }
+
+    {
+        let io_barrier = Arc::clone(&io_barrier_arc);
+        let cpu_barrier = Arc::clone(&cpu_barrier_arc);
+        handles.push(
+            thread::Builder::new()
+                .name("Motherboard".to_string())
+                .spawn(move || {
+                    motherboard::motherboard_loop(io_barrier, cpu_barrier);
+                })
+                .unwrap(),
+        );
+    }
 
     let mut serial_out = String::new();
     let mut debug_out = String::new();
@@ -70,7 +109,7 @@ fn main() {
     let mut previous_char = '\0';
 
     'main: loop {
-        while let Ok(msg) = receiver.try_recv() {
+        while let Ok(msg) = ui_receiver.try_recv() {
             match msg {
                 msg::UIMessage::Serial(c) => {
                     serial_out.push(c);
