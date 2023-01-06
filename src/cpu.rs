@@ -14,6 +14,7 @@ pub fn cpu_loop(mem: &mut [u8], cpu_barrier: Arc<Barrier>, ui_sender: Sender<UIM
             let mut a_val = crate::mem::read(mem, a_addr as usize);
             let b_val = crate::mem::read(mem, b_addr as usize);
 
+            /*
             if ui_sender
                 .send(UIMessage::Debug(format!(
                     "{eip:#X} {a_addr:#X}({a_val:#X}) {b_addr:#X}({b_val:#X}) {c_addr:#X}\r\n"
@@ -22,6 +23,7 @@ pub fn cpu_loop(mem: &mut [u8], cpu_barrier: Arc<Barrier>, ui_sender: Sender<UIM
             {
                 break;
             }
+            */
 
             a_val -= b_val;
             crate::mem::write(mem, a_addr as usize, &i64::to_be_bytes(a_val));
