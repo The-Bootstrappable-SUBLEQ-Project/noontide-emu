@@ -48,7 +48,14 @@ pub fn render_debug(debug_data: &Option<DebugData>, eip: i64, lines: usize) -> S
     }
     cur_line -= 1;
 
-    for i in (cur_line - lines)..(cur_line + lines + 1) {
+    let start = if lines > cur_line {
+        0
+    } else {
+        cur_line - lines
+    };
+
+    let end = std::cmp::min(debug_data.offsets.len(), cur_line + lines + 1);
+    for i in start..end {
         let line = &debug_data.offsets[i].1;
         if i == cur_line {
             ret_lines.push("->  ".to_owned() + line);

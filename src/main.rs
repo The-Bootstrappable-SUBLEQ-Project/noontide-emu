@@ -1,4 +1,5 @@
 use std::{
+    collections::VecDeque,
     sync::{Arc, Barrier},
     thread,
 };
@@ -7,6 +8,8 @@ use crossterm::event::{Event, KeyCode, KeyModifiers, MouseEventKind};
 use tui::{layout::*, text::Text, widgets::*};
 
 use sync_unsafe_cell::*;
+
+use itertools::Itertools;
 
 mod cpu;
 mod mem;
@@ -122,11 +125,16 @@ fn main() {
     }
 
     let mut serial_out = String::new();
-    let mut debug_out = "CPU 0 is still starting...".to_owned();
+    let mut code_out = "CPU 0 is still starting...".to_owned();
+    let mut debug_entries = VecDeque::new();
+
+    let mut cur_window = 0;
+    let window_types = 2;
+    let window_names = vec!["Code", "Debug (CPU 0)"];
 
     let mut scroll = (0, 0);
     let mut previous_char = '\0';
-    let debug_lines: u16 = 5;
+    let debug_lines: usize = 10;
 
     'main: loop {
         while let Ok(msg) = ui_receiver.try_recv() {
@@ -135,14 +143,23 @@ fn main() {
                     serial_out.push(c);
                 }
                 msg::UIMessage::SetEIP(eip) => {
-                    debug_out = pdb::render_debug(&debug_data, eip, debug_lines as usize);
+                    code_out = pdb::render_debug(&debug_data, eip, (debug_lines / 2) as usize);
+                }
+                msg::UIMessage::Debug(str) => {
+                    debug_entries.push_back(str);
+                    if debug_entries.len() > debug_lines {
+                        debug_entries.pop_front();
+                    }
                 }
             }
         }
 
         {
             let serial_out = serial_out.clone();
-            let debug_out = debug_out.clone();
+            let code_out = code_out.clone();
+            let debug_out = debug_entries.iter().join("");
+
+            let window_name = window_names[cur_window];
             terminal
                 .draw(move |f| {
                     let chunks = Layout::default()
@@ -160,11 +177,19 @@ fn main() {
                         }),
                     );
 
-                    let block = Block::default().title("Code").borders(Borders::ALL);
+                    let block = Block::default().title(window_name).borders(Borders::ALL);
                     f.render_widget(block, chunks[1]);
-                    let p = Paragraph::new(Text::from(debug_out))
-                        .wrap(Wrap { trim: false })
-                        .scroll(scroll);
+
+                    let p = if cur_window == 0 {
+                        Paragraph::new(Text::from(code_out))
+                            .wrap(Wrap { trim: false })
+                            .scroll(scroll)
+                    } else {
+                        Paragraph::new(Text::from(debug_out))
+                            .wrap(Wrap { trim: false })
+                            .scroll(scroll)
+                    };
+
                     f.render_widget(
                         p,
                         chunks[1].inner(&Margin {
@@ -185,13 +210,13 @@ fn main() {
                         break 'main;
                     }
                     KeyCode::Left => {
-                        if scroll.1 != 0 {
-                            scroll.1 -= 1;
+                        if cur_window != 0 {
+                            cur_window -= 1;
+                        } else {
+                            cur_window = window_types - 1;
                         }
                     }
-                    KeyCode::Right => {
-                        scroll.1 += 1;
-                    }
+                    KeyCode::Right => cur_window = (cur_window + 1) % window_types,
                     KeyCode::Up => {
                         if scroll.0 != 0 {
                             scroll.0 -= 1;
