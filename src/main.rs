@@ -12,6 +12,7 @@ mod cpu;
 mod mem;
 mod motherboard;
 mod msg;
+mod pdb;
 mod serial;
 mod sync_unsafe_cell;
 
@@ -42,8 +43,26 @@ fn main() {
     terminal.show_cursor().unwrap();
 
     let mut mem = vec![0u8; 0x14000000];
-    let data = std::fs::read(std::env::args().nth(1).unwrap()).unwrap();
+    let base_path = std::env::args().nth(1).unwrap();
+    let mut bin_path = base_path.clone();
+    bin_path.push_str(".bin");
+    let data = std::fs::read(bin_path).unwrap();
     mem[..data.len()].copy_from_slice(&data);
+
+    let mut debug_data: Option<pdb::DebugData> = None;
+    for ext in ["hex0", "hex1", "hex2"] {
+        let mut hex_path_str = base_path.clone();
+        hex_path_str.push('.');
+        hex_path_str.push_str(ext);
+        let hex_path = std::path::Path::new(&hex_path_str);
+        if !hex_path.exists() {
+            continue;
+        }
+
+        debug_data = Some(pdb::parse_hex_file(
+            &std::fs::read_to_string(hex_path).unwrap(),
+        ));
+    }
 
     let mut handles = vec![];
     let mem_arc = Arc::new(SyncUnsafeCell::new(mem));
@@ -103,10 +122,11 @@ fn main() {
     }
 
     let mut serial_out = String::new();
-    let mut debug_out = String::new();
+    let mut debug_out = "CPU 0 is still starting...".to_owned();
 
     let mut scroll = (0, 0);
     let mut previous_char = '\0';
+    let debug_lines: u16 = 5;
 
     'main: loop {
         while let Ok(msg) = ui_receiver.try_recv() {
@@ -114,8 +134,8 @@ fn main() {
                 msg::UIMessage::Serial(c) => {
                     serial_out.push(c);
                 }
-                msg::UIMessage::Debug(s) => {
-                    debug_out.push_str(&s);
+                msg::UIMessage::SetEIP(eip) => {
+                    debug_out = pdb::render_debug(&debug_data, eip, debug_lines as usize);
                 }
             }
         }
@@ -126,7 +146,7 @@ fn main() {
             terminal
                 .draw(move |f| {
                     let chunks = Layout::default()
-                        .constraints([Constraint::Percentage(70), Constraint::Percentage(30)])
+                        .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
                         .split(f.size());
 
                     let block = Block::default().title("Serial").borders(Borders::ALL);
@@ -140,7 +160,7 @@ fn main() {
                         }),
                     );
 
-                    let block = Block::default().title("Debug").borders(Borders::ALL);
+                    let block = Block::default().title("Code").borders(Borders::ALL);
                     f.render_widget(block, chunks[1]);
                     let p = Paragraph::new(Text::from(debug_out))
                         .wrap(Wrap { trim: false })

@@ -25,13 +25,17 @@ pub fn cpu_loop(mem: &mut [u8], cpu_barrier: Arc<Barrier>, ui_sender: Sender<UIM
             }
             */
 
-            a_val -= b_val;
+            a_val = a_val.wrapping_sub(b_val);
             crate::mem::write(mem, a_addr as usize, &i64::to_be_bytes(a_val));
             if a_val <= 0 {
                 eip = c_addr;
             } else {
                 eip += 24;
             }
+        }
+
+        if ui_sender.send(UIMessage::SetEIP(eip)).is_err() {
+            break;
         }
         cpu_barrier.wait();
     }
