@@ -1,5 +1,5 @@
 pub struct DebugData {
-    offsets: Vec<(i64, String)>,
+    offsets: Vec<(u64, String)>,
 }
 
 pub fn parse_hex_file(inp: &str) -> DebugData {
@@ -30,7 +30,7 @@ pub fn parse_hex_file(inp: &str) -> DebugData {
     ret
 }
 
-pub fn render_debug(debug_data: &Option<DebugData>, eip: i64, lines: usize) -> String {
+pub fn render_debug(debug_data: &Option<DebugData>, eip: u64, lines: usize) -> String {
     let Some(debug_data) = debug_data else {
         return "Error: Missing hex0, hex1, or hex2 file for debugging".to_owned();
     };
