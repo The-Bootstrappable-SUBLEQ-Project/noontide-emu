@@ -129,8 +129,8 @@ fn main() {
     let mut debug_entries = VecDeque::new();
 
     let mut cur_window = 0;
-    let window_types = 2;
-    let window_names = vec!["Code", "Debug (CPU 0)"];
+    let window_names = vec!["Code", "Memory Dump", "Debug (CPU 0)"];
+    let window_types = window_names.len();
 
     let mut scroll = (0, 0);
     let mut previous_char = '\0';
@@ -157,6 +157,7 @@ fn main() {
         {
             let serial_out = serial_out.clone();
             let code_out = code_out.clone();
+            let mem_out = pdb::memory_dump(unsafe { mem_arc.get().as_ref().unwrap() });
             let debug_out = debug_entries.iter().join("");
 
             let window_name = window_names[cur_window];
@@ -182,6 +183,10 @@ fn main() {
 
                     let p = if cur_window == 0 {
                         Paragraph::new(Text::from(code_out))
+                            .wrap(Wrap { trim: false })
+                            .scroll(scroll)
+                    } else if cur_window == 1 {
+                        Paragraph::new(Text::from(mem_out))
                             .wrap(Wrap { trim: false })
                             .scroll(scroll)
                     } else {
@@ -210,13 +215,17 @@ fn main() {
                         break 'main;
                     }
                     KeyCode::Left => {
+                        scroll = (0, 0);
                         if cur_window != 0 {
                             cur_window -= 1;
                         } else {
                             cur_window = window_types - 1;
                         }
                     }
-                    KeyCode::Right => cur_window = (cur_window + 1) % window_types,
+                    KeyCode::Right => {
+                        scroll = (0, 0);
+                        cur_window = (cur_window + 1) % window_types
+                    }
                     KeyCode::Up => {
                         if scroll.0 != 0 {
                             scroll.0 -= 1;

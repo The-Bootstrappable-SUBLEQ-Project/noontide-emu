@@ -30,6 +30,26 @@ pub fn parse_hex_file(inp: &str) -> DebugData {
     ret
 }
 
+pub fn memory_dump(mem: &[u8]) -> String {
+    let dump_bytes = 0x1000;
+
+    let mut ret = String::new();
+    let mut offset = 0;
+    while offset < dump_bytes {
+        ret.push_str(&format!("{offset:08x}:"));
+        for _i in 0..8 {
+            let a = mem[offset];
+            let b = mem[offset + 1];
+            ret.push_str(&format!(" {a:02x}{b:02x}"));
+            offset += 2;
+        }
+        ret.push('\r');
+        ret.push('\n');
+    }
+
+    ret
+}
+
 pub fn render_debug(debug_data: &Option<DebugData>, eip: u64, lines: usize) -> String {
     let Some(debug_data) = debug_data else {
         return "Error: Missing hex0, hex1, or hex2 file for debugging".to_owned();
