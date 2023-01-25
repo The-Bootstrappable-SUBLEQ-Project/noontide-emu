@@ -6,6 +6,8 @@ use std::{
     },
 };
 
+use bus::BusReader;
+
 use crate::msg::UIMessage;
 
 const SERIAL_CONNECTED: usize = 0x13ED27E0;
@@ -17,12 +19,19 @@ pub fn serial_loop(
     io_barrier: Arc<Barrier>,
     ui_sender: Sender<UIMessage>,
     serial_receiver: Receiver<char>,
+    mut term_rx: BusReader<usize>,
 ) {
     crate::mem::write(mem, SERIAL_CONNECTED, &i64::to_be_bytes(1));
     let mut input_buffer: VecDeque<char> = VecDeque::new();
 
     loop {
         io_barrier.wait();
+
+        if let Ok(_val) = term_rx.try_recv() {
+            io_barrier.wait();
+            return;
+        }
+
         while let Ok(input) = serial_receiver.try_recv() {
             input_buffer.push_back(input);
         }

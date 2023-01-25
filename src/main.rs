@@ -5,6 +5,7 @@ use std::{
     thread,
 };
 
+use bus::Bus;
 use clap::Parser;
 use crossterm::event::{Event, KeyCode, KeyModifiers, MouseEventKind};
 use tui::{layout::*, text::Text, widgets::*};
@@ -71,6 +72,12 @@ fn main() {
     let (ui_sender, ui_receiver) = std::sync::mpsc::channel();
     let (serial_sender, serial_receiver) = std::sync::mpsc::channel();
 
+    // Set up the broadcast bus for stopping threads
+    let mut term_tx: Bus<usize> = Bus::new(10);
+    let term_rx_serial = term_tx.add_rx();
+    let term_rx_cpu0 = term_tx.add_rx();
+    let term_rx_mb = term_tx.add_rx();
+
     // Start the Serial thread
     {
         let mem = Arc::clone(&mem_arc);
@@ -85,6 +92,7 @@ fn main() {
                         io_barrier,
                         sender,
                         serial_receiver,
+                        term_rx_serial,
                     )
                 })
                 .unwrap(),
@@ -101,8 +109,10 @@ fn main() {
                 .spawn(move || {
                     cpu::cpu_loop(
                         unsafe { mem.get().as_mut().unwrap() },
+                        0,
                         cpu_barrier,
                         ui_sender,
+                        term_rx_cpu0,
                     )
                 })
                 .unwrap(),
@@ -117,13 +127,14 @@ fn main() {
             thread::Builder::new()
                 .name("Motherboard".to_string())
                 .spawn(move || {
-                    motherboard::motherboard_loop(io_barrier, cpu_barrier);
+                    motherboard::motherboard_loop(io_barrier, cpu_barrier, term_rx_mb);
                 })
                 .unwrap(),
         );
     }
 
     let mut serial_out = String::new();
+    let mut cpus_running = 1;
     match cli.batch_input {
         None => {
             // Make crossterm exit itself upon panic
@@ -178,6 +189,26 @@ fn main() {
                             debug_entries.push_back(str);
                             if debug_entries.len() > debug_lines {
                                 debug_entries.pop_front();
+                            }
+                        }
+                        msg::UIMessage::CPUStarted(_cpu_id) => {
+                            cpus_running += 1;
+                        }
+                        msg::UIMessage::CPUStopped(_cpu_id) => {
+                            cpus_running -= 1;
+                            if cpus_running == 0 {
+                                // Exit crossterm cleanly
+                                crossterm::terminal::disable_raw_mode().unwrap();
+                                crossterm::execute!(
+                                    terminal.backend_mut(),
+                                    crossterm::terminal::LeaveAlternateScreen,
+                                    crossterm::event::DisableMouseCapture,
+                                    crossterm::event::DisableBracketedPaste
+                                )
+                                .unwrap();
+                                terminal.show_cursor().unwrap();
+
+                                break 'main;
                             }
                         }
                     }
@@ -296,17 +327,6 @@ fn main() {
                     }
                 }
             }
-
-            // Exit crossterm cleanly
-            crossterm::terminal::disable_raw_mode().unwrap();
-            crossterm::execute!(
-                terminal.backend_mut(),
-                crossterm::terminal::LeaveAlternateScreen,
-                crossterm::event::DisableMouseCapture,
-                crossterm::event::DisableBracketedPaste
-            )
-            .unwrap();
-            terminal.show_cursor().unwrap();
         }
         Some(batch_input) => {
             let input_data = std::fs::read(batch_input).unwrap();
@@ -314,17 +334,34 @@ fn main() {
                 serial_sender.send(chr as char).unwrap();
             }
 
-            loop {
+            'main: loop {
                 while let Ok(msg) = ui_receiver.try_recv() {
-                    if let msg::UIMessage::Serial(c) = msg {
-                        serial_out.push(c);
-                        print!("{}", c);
-                        std::io::stdout().flush().unwrap();
+                    match msg {
+                        msg::UIMessage::Serial(c) => {
+                            serial_out.push(c);
+                            print!("{}", c);
+                            std::io::stdout().flush().unwrap();
+                        }
+                        msg::UIMessage::CPUStarted(_cpu_id) => {
+                            cpus_running += 1;
+                        }
+                        msg::UIMessage::CPUStopped(_cpu_id) => {
+                            cpus_running -= 1;
+                            if cpus_running == 0 {
+                                break 'main;
+                            }
+                        }
+                        _ => {}
                     }
                 }
 
                 std::thread::sleep(std::time::Duration::from_micros(20));
             }
         }
+    }
+
+    term_tx.broadcast(0);
+    for thread in handles {
+        thread.join().unwrap();
     }
 }
