@@ -4,6 +4,7 @@ use std::{
     thread,
 };
 
+use clap::Parser;
 use crossterm::event::{Event, KeyCode, KeyModifiers, MouseEventKind};
 use tui::{layout::*, text::Text, widgets::*};
 
@@ -19,7 +20,19 @@ mod pdb;
 mod serial;
 mod sync_unsafe_cell;
 
+#[derive(Parser)]
+#[command(name = "noontide-emu")]
+#[command(author = "NyanCatTW1")]
+#[command(about = "An emulator/debugger of the Noontide SUBLEQ Computer to aid in the development of related projects", long_about = None)]
+struct Cli {
+    #[arg(help = "Base path of a program, without the .bin")]
+    base_path: String,
+}
+
 fn main() {
+    let cli = Cli::parse();
+    let base_path = cli.base_path;
+
     let original_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |panic| {
         crossterm::terminal::disable_raw_mode().unwrap();
@@ -46,7 +59,6 @@ fn main() {
     terminal.show_cursor().unwrap();
 
     let mut mem = vec![0u8; 0x14000000];
-    let base_path = std::env::args().nth(1).unwrap();
     let mut bin_path = base_path.clone();
     bin_path.push_str(".bin");
     let data = std::fs::read(bin_path).unwrap();
