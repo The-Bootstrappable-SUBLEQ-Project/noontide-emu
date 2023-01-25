@@ -6,7 +6,7 @@ pub fn cpu_loop(mem: &mut [u8], cpu_barrier: Arc<Barrier>, ui_sender: Sender<UIM
     let mut eip: u64 = 0;
     loop {
         cpu_barrier.wait();
-        for _i in 0..1000 {
+        for _i in 0..40 {
             if (eip as usize) >= mem.len() {
                 if ui_sender.send(UIMessage::SetEIP(eip)).is_err() {
                     break;
