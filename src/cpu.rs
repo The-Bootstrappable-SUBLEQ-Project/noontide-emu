@@ -24,6 +24,7 @@ pub fn cpu_loop(
 
         if let Ok(_val) = term_rx.try_recv() {
             cpu_barrier.wait();
+            eprintln!("CPU {} exited", cpu_id);
             return;
         }
 
@@ -43,6 +44,7 @@ pub fn cpu_loop(
                 // Not sure if this is required, but just to be safe...
                 if let Ok(_val) = term_rx.try_recv() {
                     cpu_barrier.wait();
+                    eprintln!("CPU {} exited", cpu_id);
                     return;
                 }
 

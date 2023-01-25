@@ -71,12 +71,13 @@ fn main() {
     // Set up the mpsc channels
     let (ui_sender, ui_receiver) = std::sync::mpsc::channel();
     let (serial_sender, serial_receiver) = std::sync::mpsc::channel();
+    let (mb1_sender, mb1_receiver) = std::sync::mpsc::channel();
+    let (mb2_sender, mb2_receiver) = std::sync::mpsc::channel();
 
     // Set up the broadcast bus for stopping threads
     let mut term_tx: Bus<usize> = Bus::new(10);
     let term_rx_serial = term_tx.add_rx();
     let term_rx_cpu0 = term_tx.add_rx();
-    let term_rx_mb = term_tx.add_rx();
 
     // Start the Serial thread
     {
@@ -127,7 +128,12 @@ fn main() {
             thread::Builder::new()
                 .name("Motherboard".to_string())
                 .spawn(move || {
-                    motherboard::motherboard_loop(io_barrier, cpu_barrier, term_rx_mb);
+                    motherboard::motherboard_loop(
+                        io_barrier,
+                        cpu_barrier,
+                        mb1_receiver,
+                        mb2_sender,
+                    );
                 })
                 .unwrap(),
         );
@@ -360,7 +366,15 @@ fn main() {
         }
     }
 
+    // Start shutdown procedure
+    mb1_sender.send(0).unwrap();
+    // Wait for Motherboard's acknowledgement
+    mb2_receiver.recv().unwrap();
+    // Send termination broadcast
     term_tx.broadcast(0);
+    // Let the Motherboard know that the broadcast has been sent
+    mb1_sender.send(0).unwrap();
+
     for thread in handles {
         thread.join().unwrap();
     }

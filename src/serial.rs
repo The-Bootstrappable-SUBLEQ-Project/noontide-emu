@@ -29,6 +29,7 @@ pub fn serial_loop(
 
         if let Ok(_val) = term_rx.try_recv() {
             io_barrier.wait();
+            eprintln!("Serial exited");
             return;
         }
 
