@@ -13,10 +13,28 @@ pub fn parse_hex_file(inp: &str) -> DebugData {
     for line in inp.lines() {
         ret.offsets.push((offset, line.to_owned()));
         let mut hex_chars = 0;
-        // TODO: Handle hex1/hex2
+        let mut wait_for_space = false;
         for c in line.chars() {
+            // Comments
             if c == '#' || c == ';' {
                 break;
+            }
+
+            if c == ' ' {
+                wait_for_space = false;
+            }
+
+            if wait_for_space {
+                continue;
+            }
+
+            if c == '?' || c == '&' || c == ':' {
+                if c != ':' {
+                    hex_chars += 16;
+                }
+
+                wait_for_space = true;
+                continue;
             }
 
             if hex_charset.contains(&c) {
