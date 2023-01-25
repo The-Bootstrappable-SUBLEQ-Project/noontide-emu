@@ -23,7 +23,7 @@ pub fn motherboard_loop(
             io_barrier.wait();
             cpu_barrier.wait();
             cpu_barrier.wait();
-            eprintln!("Motherboard exited");
+            // eprintln!("Motherboard exited");
             return;
         }
     }

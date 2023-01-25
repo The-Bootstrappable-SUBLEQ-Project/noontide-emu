@@ -24,7 +24,7 @@ pub fn cpu_loop(
 
         if let Ok(_val) = term_rx.try_recv() {
             cpu_barrier.wait();
-            eprintln!("CPU {} exited", cpu_id);
+            // eprintln!("CPU {} exited", cpu_id);
             return;
         }
 
@@ -41,10 +41,9 @@ pub fn cpu_loop(
             while crate::mem::read(mem, cpu_control_status) != 1 {
                 cpu_barrier.wait();
 
-                // Not sure if this is required, but just to be safe...
                 if let Ok(_val) = term_rx.try_recv() {
                     cpu_barrier.wait();
-                    eprintln!("CPU {} exited", cpu_id);
+                    // eprintln!("CPU {} exited", cpu_id);
                     return;
                 }
 
