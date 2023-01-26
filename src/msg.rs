@@ -1,5 +1,5 @@
 pub enum UIMessage {
-    Serial(char),
+    Serial(u8),
     #[allow(dead_code)]
     Debug(String),
     SetEIP(u64),

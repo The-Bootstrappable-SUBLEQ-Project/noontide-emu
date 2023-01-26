@@ -45,10 +45,14 @@ pub fn serial_loop(
             );
         }
 
-        let out = crate::mem::read(mem, SERIAL_OUT);
+        let mut out: u64 = crate::mem::read(mem, SERIAL_OUT) as u64;
         if out != 0 {
-            if ui_sender
-                .send(UIMessage::Serial(char::from_u32((out - 1) as u32).unwrap()))
+            out -= 1;
+            // eprintln!("Serial output: {:#x}", out);
+            if out > 255 {
+                eprintln!("Bad serial output: {:#x}", out);
+            } else if ui_sender
+                .send(UIMessage::Serial(out.try_into().unwrap()))
                 .is_err()
             {
                 break;

@@ -139,7 +139,6 @@ fn main() {
         );
     }
 
-    let mut serial_out = String::new();
     let mut cpus_running = 1;
     match cli.batch_input {
         None => {
@@ -181,11 +180,12 @@ fn main() {
             let mut previous_char = '\0';
             let debug_lines: usize = 10;
 
+            let mut serial_out = String::new();
             'main: loop {
                 while let Ok(msg) = ui_receiver.try_recv() {
                     match msg {
                         msg::UIMessage::Serial(c) => {
-                            serial_out.push(c);
+                            serial_out.push(c as char);
                         }
                         msg::UIMessage::SetEIP(eip) => {
                             code_out =
@@ -344,8 +344,9 @@ fn main() {
                 while let Ok(msg) = ui_receiver.try_recv() {
                     match msg {
                         msg::UIMessage::Serial(c) => {
-                            serial_out.push(c);
-                            print!("{}", c);
+                            std::io::stdout()
+                                .write_all(std::slice::from_ref(&c))
+                                .unwrap();
                             std::io::stdout().flush().unwrap();
                         }
                         msg::UIMessage::CPUStarted(_cpu_id) => {
