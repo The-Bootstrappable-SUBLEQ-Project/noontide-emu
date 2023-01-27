@@ -182,7 +182,7 @@ fn main() {
 
             let mut serial_out = String::new();
             'main: loop {
-                while let Ok(msg) = ui_receiver.try_recv() {
+                if let Ok(msg) = ui_receiver.recv() {
                     match msg {
                         msg::UIMessage::Serial(c) => {
                             serial_out.push(c as char);
@@ -214,10 +214,12 @@ fn main() {
                                 .unwrap();
                                 terminal.show_cursor().unwrap();
 
-                                break 'main;
+                                break;
                             }
                         }
                     }
+                } else {
+                    panic!("ui_receiver failed");
                 }
 
                 {
@@ -340,8 +342,8 @@ fn main() {
                 serial_sender.send(chr as char).unwrap();
             }
 
-            'main: loop {
-                while let Ok(msg) = ui_receiver.try_recv() {
+            loop {
+                if let Ok(msg) = ui_receiver.recv() {
                     match msg {
                         msg::UIMessage::Serial(c) => {
                             std::io::stdout()
@@ -355,14 +357,14 @@ fn main() {
                         msg::UIMessage::CPUStopped(_cpu_id) => {
                             cpus_running -= 1;
                             if cpus_running == 0 {
-                                break 'main;
+                                break;
                             }
                         }
                         _ => {}
                     }
+                } else {
+                    panic!("ui_receiver failed");
                 }
-
-                std::thread::sleep(std::time::Duration::from_micros(20));
             }
         }
     }
