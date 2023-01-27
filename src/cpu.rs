@@ -57,7 +57,11 @@ pub fn cpu_loop(
             cpu_barrier.wait();
         }
 
-        for _i in 0..40 {
+        //  512: 16.3575 +- 0.0710 seconds time elapsed  ( +-  0.43% )
+        // 1024: 16.3151 +- 0.0483 seconds time elapsed  ( +-  0.30% )
+        // 2048: 16.4346 +- 0.0623 seconds time elapsed  ( +-  0.38% )
+        // 4096: 16.5468 +- 0.0562 seconds time elapsed  ( +-  0.34% )
+        for _i in 0..1024 {
             if (eip as usize) >= mem.len() {
                 if ui_sender.send(UIMessage::SetEIP(eip)).is_err() {
                     break;

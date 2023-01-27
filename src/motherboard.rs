@@ -14,7 +14,6 @@ pub fn motherboard_loop(
         io_barrier.wait();
         cpu_barrier.wait();
         cpu_barrier.wait();
-        std::thread::sleep(std::time::Duration::from_micros(20));
 
         if let Ok(_val) = mb1_receiver.try_recv() {
             mb2_sender.send(0).unwrap();
