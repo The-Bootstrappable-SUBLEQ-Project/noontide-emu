@@ -48,7 +48,7 @@ fn main() {
 
     // Load the debug data from hex*, if any
     let mut debug_data: Option<pdb::DebugData> = None;
-    for ext in ["hex0", "hex1", "hxe2"] {
+    for ext in ["hex0", "hex1", "hex2"] {
         let mut hex_path_str = base_path.clone();
         hex_path_str.push('.');
         hex_path_str.push_str(ext);
@@ -191,7 +191,7 @@ fn main() {
                             code_out =
                                 pdb::render_debug(&debug_data, eip, (debug_lines / 2) as usize);
                         }
-                        msg::UIMessage::Debug(str) => {
+                        msg::UIMessage::Debug(_eip, str) => {
                             debug_entries.push_back(str);
                             if debug_entries.len() > debug_lines {
                                 debug_entries.pop_front();
@@ -226,7 +226,7 @@ fn main() {
                     let serial_out = serial_out.clone();
                     let code_out = code_out.clone();
                     let mem_out = pdb::memory_dump(unsafe { mem_arc.get().as_ref().unwrap() });
-                    let debug_out = debug_entries.iter().join("");
+                    let debug_out = debug_entries.iter().join("\r\n");
 
                     let window_name = window_names[cur_window];
                     terminal
@@ -345,6 +345,9 @@ fn main() {
             loop {
                 if let Ok(msg) = ui_receiver.recv() {
                     match msg {
+                        msg::UIMessage::Debug(eip, dat) => {
+                            eprintln!("{}\n{}\n", dat, pdb::render_debug(&debug_data, eip, 0));
+                        }
                         msg::UIMessage::Serial(c) => {
                             std::io::stdout()
                                 .write_all(std::slice::from_ref(&c))

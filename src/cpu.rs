@@ -80,14 +80,31 @@ pub fn cpu_loop(
             #[cfg(feature = "debugger")]
             {
                 ui_sender
-                    .send(UIMessage::Debug(format!(
-                        "{eip:#X} {a_addr:#X}({a_val:#X}) {b_addr:#X}({b_val:#X}) {c_addr:#X}\r\n"
-                    )))
+                    .send(UIMessage::Debug(
+                        eip,
+                        format!(
+                            "{eip:#X} {a_addr:#X}({a_val:#X}) {b_addr:#X}({b_val:#X}) {c_addr:#X}"
+                        ),
+                    ))
                     .unwrap();
             }
 
             a_val = a_val.wrapping_sub(b_val);
             crate::mem::write(mem, a_addr as usize, &i64::to_be_bytes(a_val));
+
+            #[cfg(feature = "debugger")]
+            {
+                if a_addr == 0x13ED27F0 {
+                    a_val -= 1;
+                    ui_sender
+                        .send(UIMessage::Debug(
+                            eip,
+                            format!("Serial write: {a_val:#x} @ {eip:#x}"),
+                        ))
+                        .unwrap();
+                }
+            }
+
             if a_val <= 0 {
                 eip = c_addr as u64;
             } else {

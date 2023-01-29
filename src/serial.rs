@@ -48,7 +48,6 @@ pub fn serial_loop(
         let mut out: u64 = crate::mem::read(mem, SERIAL_OUT) as u64;
         if out != 0 {
             out -= 1;
-            // eprintln!("Serial output: {:#x}", out);
             if out > 255 {
                 eprintln!("Bad serial output: {:#x}", out);
             } else if ui_sender
