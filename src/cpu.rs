@@ -16,7 +16,11 @@ pub fn cpu_loop(
     let cpu_control_status = CPU_CONTROL_START + 16 * cpu_id;
     let cpu_control_eip = cpu_control_status + 8;
 
-    crate::mem::write(mem, cpu_control_status, &u64::to_be_bytes(1));
+    if cpu_id == 0 {
+        // Enable CPU 0 by default
+        crate::mem::write(mem, cpu_control_status, &u64::to_be_bytes(1));
+    }
+
     let mut eip: u64 = 0;
     loop {
         // CPU cycle start
