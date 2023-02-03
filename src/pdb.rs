@@ -68,7 +68,7 @@ pub fn memory_dump(mem: &[u8]) -> String {
     ret
 }
 
-pub fn render_debug(debug_data: &Option<DebugData>, eip: u64, lines: usize) -> String {
+pub fn render_debug(debug_data: &Option<DebugData>, eip: u64, lines: usize, batch: bool) -> String {
     let Some(debug_data) = debug_data else {
         return "Error: Missing hex0, hex1, or hex2 file for debugging".to_owned();
     };
@@ -102,5 +102,9 @@ pub fn render_debug(debug_data: &Option<DebugData>, eip: u64, lines: usize) -> S
         }
     }
 
-    ret_lines.join("\r\n")
+    if batch {
+        ret_lines.join("\n")
+    } else {
+        ret_lines.join("\r\n")
+    }
 }

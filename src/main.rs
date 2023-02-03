@@ -188,8 +188,12 @@ fn main() {
                             serial_out.push(c as char);
                         }
                         msg::UIMessage::SetEIP(eip) => {
-                            code_out =
-                                pdb::render_debug(&debug_data, eip, (debug_lines / 2) as usize);
+                            code_out = pdb::render_debug(
+                                &debug_data,
+                                eip,
+                                (debug_lines / 2) as usize,
+                                false,
+                            );
                         }
                         msg::UIMessage::Debug(_eip, str) => {
                             debug_entries.push_back(str);
@@ -346,7 +350,11 @@ fn main() {
                 if let Ok(msg) = ui_receiver.recv() {
                     match msg {
                         msg::UIMessage::Debug(eip, dat) => {
-                            eprintln!("{}\n{}\n", dat, pdb::render_debug(&debug_data, eip, 0));
+                            eprintln!(
+                                "{}\n{}\n",
+                                dat,
+                                pdb::render_debug(&debug_data, eip, 1, true)
+                            );
                         }
                         msg::UIMessage::Serial(c) => {
                             std::io::stdout()
