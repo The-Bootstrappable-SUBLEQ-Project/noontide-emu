@@ -353,7 +353,7 @@ fn main() {
                             eprintln!(
                                 "{}\n{}\n",
                                 dat,
-                                pdb::render_debug(&debug_data, eip, 1, true)
+                                pdb::render_debug(&debug_data, eip, 2, true)
                             );
                         }
                         msg::UIMessage::Serial(c) => {
