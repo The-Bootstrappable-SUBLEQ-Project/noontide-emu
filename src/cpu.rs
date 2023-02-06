@@ -69,7 +69,7 @@ pub fn cpu_loop(
         // 2048: 16.4346 +- 0.0623 seconds time elapsed  ( +-  0.38% )
         // 4096: 16.5468 +- 0.0562 seconds time elapsed  ( +-  0.34% )
         #[cfg(not(feature = "debugger"))]
-        let cycle_length = 1024;
+        let cycle_length = 4096;
 
         for _i in 0..cycle_length {
             if (eip as usize) >= mem.len() {
@@ -123,6 +123,8 @@ pub fn cpu_loop(
         }
 
         crate::mem::write(mem, cpu_control_eip, &u64::to_be_bytes(eip));
+
+        #[cfg(feature = "debugger")]
         ui_sender.send(UIMessage::SetEIP(eip)).unwrap();
 
         // CPU cycle end
