@@ -1,5 +1,5 @@
 pub struct DebugData {
-    offsets: Vec<(u64, String)>,
+    pub offsets: Vec<(u64, String)>,
 }
 
 pub fn parse_hex_file(inp: &str) -> DebugData {
