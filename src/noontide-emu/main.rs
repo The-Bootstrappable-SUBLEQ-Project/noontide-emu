@@ -111,6 +111,20 @@ fn main() {
         );
     }
 
+    #[cfg(feature = "debugger")]
+    let mut cycle_length = 1;
+
+    //  512: 16.3575 +- 0.0710 seconds time elapsed  ( +-  0.43% )
+    // 1024: 16.3151 +- 0.0483 seconds time elapsed  ( +-  0.30% )
+    // 2048: 16.4346 +- 0.0623 seconds time elapsed  ( +-  0.38% )
+    // 4096: 16.5468 +- 0.0562 seconds time elapsed  ( +-  0.34% )
+    #[cfg(not(feature = "debugger"))]
+    let mut cycle_length = 4096;
+
+    if record_eips {
+        cycle_length = std::cmp::min(cycle_length, 100);
+    }
+
     // Start the CPU 0 thread
     {
         let mem = Arc::clone(&mem_arc);
@@ -125,6 +139,7 @@ fn main() {
                         cpu_barrier,
                         ui_sender,
                         term_rx_cpu0,
+                        cycle_length,
                     )
                 })
                 .unwrap(),

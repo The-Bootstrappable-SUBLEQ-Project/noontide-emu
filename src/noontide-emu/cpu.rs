@@ -12,6 +12,7 @@ pub fn cpu_loop(
     cpu_barrier: Arc<Barrier>,
     ui_sender: Sender<UIMessage>,
     mut term_rx: BusReader<usize>,
+    cycle_length: u32,
 ) {
     let cpu_control_status = CPU_CONTROL_START + 16 * cpu_id;
     let cpu_control_eip = cpu_control_status + 8;
@@ -60,16 +61,6 @@ pub fn cpu_loop(
             // CPU cycle start
             cpu_barrier.wait();
         }
-
-        #[cfg(feature = "debugger")]
-        let cycle_length = 1;
-
-        //  512: 16.3575 +- 0.0710 seconds time elapsed  ( +-  0.43% )
-        // 1024: 16.3151 +- 0.0483 seconds time elapsed  ( +-  0.30% )
-        // 2048: 16.4346 +- 0.0623 seconds time elapsed  ( +-  0.38% )
-        // 4096: 16.5468 +- 0.0562 seconds time elapsed  ( +-  0.34% )
-        #[cfg(not(feature = "debugger"))]
-        let cycle_length = 4096;
 
         for _i in 0..cycle_length {
             if (eip as usize) >= mem.len() {
