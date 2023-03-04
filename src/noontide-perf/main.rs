@@ -2,6 +2,7 @@ use std::fs::File;
 
 use bincode::deserialize_from;
 use clap::Parser;
+use colored::Colorize;
 use std::collections::HashMap;
 
 use noontide_emu::pdb;
@@ -65,12 +66,17 @@ fn main() {
     }
 
     for (hits, line) in hits_per_line {
+        let percentage = (hits as f64 * 100.0) / total_hits as f64;
         let hits_str = if hits == 0 {
             "".to_owned()
         } else {
-            format!("{:.2}", (hits as f64 * 100.0) / total_hits as f64)
+            format!("{:.2}", percentage)
         };
 
-        println!("{: >8} | {}", hits_str, line);
+        if percentage >= 1.0 {
+            println!("{: >8} | {}", hits_str.red(), line.red());
+        } else {
+            println!("{: >8} | {}", hits_str, line);
+        }
     }
 }
