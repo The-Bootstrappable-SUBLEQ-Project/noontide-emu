@@ -1,6 +1,7 @@
 use std::{
-    collections::VecDeque,
-    io::Write,
+    collections::{HashMap, VecDeque},
+    fs::File,
+    io::{BufWriter, Write},
     sync::{Arc, Barrier},
     thread,
 };
@@ -12,13 +13,14 @@ use tui::{layout::*, text::Text, widgets::*};
 
 use sync_unsafe_cell::*;
 
+use bincode::serialize_into;
 use itertools::Itertools;
 
 mod cpu;
 mod mem;
 mod motherboard;
 mod msg;
-mod pdb;
+use noontide_emu::pdb;
 mod serial;
 mod sync_unsafe_cell;
 
@@ -33,6 +35,12 @@ struct Cli {
     #[arg(short = 'b')]
     #[arg(help = "Disable the TUI, read input from the input file, and output to stdout")]
     batch_input: Option<String>,
+
+    #[arg(short = 'r')]
+    #[arg(
+        help = "Record processor EIPs into a file, which can later be analyzed with noontide-perf"
+    )]
+    record_path: Option<String>,
 }
 
 fn main() {
@@ -61,6 +69,9 @@ fn main() {
             &std::fs::read_to_string(hex_path).unwrap(),
         ));
     }
+
+    let record_eips = cli.record_path.is_some();
+    let mut recorded_eips: HashMap<u64, u64> = HashMap::new();
 
     // Set up the Arcs
     let mut handles = vec![];
@@ -194,6 +205,10 @@ fn main() {
                                 (debug_lines / 2) as usize,
                                 false,
                             );
+
+                            if record_eips {
+                                *recorded_eips.entry(eip).or_insert(0) += 1;
+                            }
                         }
                         msg::UIMessage::Debug(_eip, str) => {
                             debug_entries.push_back(str);
@@ -362,6 +377,11 @@ fn main() {
                                 .unwrap();
                             std::io::stdout().flush().unwrap();
                         }
+                        msg::UIMessage::SetEIP(eip) => {
+                            if record_eips {
+                                *recorded_eips.entry(eip).or_insert(0) += 1;
+                            }
+                        }
                         msg::UIMessage::CPUStarted(_cpu_id) => {
                             cpus_running += 1;
                         }
@@ -371,7 +391,6 @@ fn main() {
                                 break;
                             }
                         }
-                        _ => {}
                     }
                 } else {
                     panic!("ui_receiver failed");
@@ -391,5 +410,10 @@ fn main() {
 
     for thread in handles {
         thread.join().unwrap();
+    }
+
+    if let Some(record_path) = cli.record_path {
+        let mut f = BufWriter::new(File::create(record_path).unwrap());
+        serialize_into(&mut f, &recorded_eips).unwrap();
     }
 }

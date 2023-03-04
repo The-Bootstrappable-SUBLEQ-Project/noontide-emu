@@ -124,7 +124,6 @@ pub fn cpu_loop(
 
         crate::mem::write(mem, cpu_control_eip, &u64::to_be_bytes(eip));
 
-        #[cfg(feature = "debugger")]
         ui_sender.send(UIMessage::SetEIP(eip)).unwrap();
 
         // CPU cycle end
