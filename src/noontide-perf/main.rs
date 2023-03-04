@@ -75,6 +75,8 @@ fn main() {
 
         if percentage >= 1.0 {
             println!("{: >8} | {}", hits_str.red(), line.red());
+        } else if percentage >= 0.1 {
+            println!("{: >8} | {}", hits_str.green(), line.green());
         } else {
             println!("{: >8} | {}", hits_str, line);
         }
