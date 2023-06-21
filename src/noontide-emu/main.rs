@@ -54,22 +54,7 @@ fn main() {
     let data = std::fs::read(bin_path).unwrap();
     mem[..data.len()].copy_from_slice(&data);
 
-    // Load the debug data from hex*, if any
-    let mut debug_data: Option<pdb::DebugData> = None;
-    for ext in ["hex0", "hex1", "hex2"] {
-        let mut hex_path_str = base_path.clone();
-        hex_path_str.push('.');
-        hex_path_str.push_str(ext);
-        let hex_path = std::path::Path::new(&hex_path_str);
-        if !hex_path.exists() {
-            continue;
-        }
-
-        debug_data = Some(pdb::parse_hex_file(
-            &std::fs::read_to_string(hex_path).unwrap(),
-        ));
-    }
-
+    let debug_data = pdb::find_debug_data(&base_path);
     let record_eips = cli.record_path.is_some();
     let mut recorded_eips: HashMap<u64, u64> = HashMap::new();
 
@@ -219,7 +204,8 @@ fn main() {
                                 eip,
                                 (debug_lines / 2) as usize,
                                 false,
-                            );
+                            )
+                            .1;
 
                             if record_eips {
                                 *recorded_eips.entry(eip).or_insert(0) += 1;
@@ -376,15 +362,17 @@ fn main() {
                 serial_sender.send(chr as char).unwrap();
             }
 
+            let mut last_line = -1;
             loop {
                 if let Ok(msg) = ui_receiver.recv() {
                     match msg {
                         msg::UIMessage::Debug(eip, dat) => {
-                            eprintln!(
-                                "{}\n{}\n",
-                                dat,
-                                pdb::render_debug(&debug_data, eip, 2, true)
-                            );
+                            let (cur_line, debug_print) =
+                                pdb::render_debug(&debug_data, eip, 2, true);
+                            if cur_line == -1 || cur_line != last_line {
+                                eprintln!("{}\n{}\n", dat, debug_print);
+                            }
+                            last_line = cur_line;
                         }
                         msg::UIMessage::Serial(c) => {
                             std::io::stdout()

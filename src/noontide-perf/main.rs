@@ -29,22 +29,7 @@ fn main() {
     let mut recorded_eips: Vec<(u64, u64)> = recorded_eips_hashmap.into_iter().collect();
     recorded_eips.sort();
 
-    // Load the debug data from hex*, if any
-    let mut debug_data: Option<pdb::DebugData> = None;
-    for ext in ["hex0", "hex1", "hex2"] {
-        let mut hex_path_str = base_path.clone();
-        hex_path_str.push('.');
-        hex_path_str.push_str(ext);
-        let hex_path = std::path::Path::new(&hex_path_str);
-        if !hex_path.exists() {
-            continue;
-        }
-
-        debug_data = Some(pdb::parse_hex_file(
-            &std::fs::read_to_string(hex_path).unwrap(),
-        ));
-    }
-
+    let debug_data = pdb::find_debug_data(&base_path);
     let lines = debug_data.unwrap().offsets;
     let mut i = 0;
     let mut total_hits = 0;
