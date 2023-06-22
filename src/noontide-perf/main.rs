@@ -17,6 +17,10 @@ struct Cli {
 
     #[arg(help = "Base path to hex*, lsq, and msq files, without the file extension")]
     base_path: String,
+
+    #[arg(long)]
+    #[arg(help = "Hide msq implementation details at and below this depth")]
+    msq_depth: Option<usize>,
 }
 
 fn main() {
@@ -29,7 +33,7 @@ fn main() {
     let mut recorded_eips: Vec<(u64, u64)> = recorded_eips_hashmap.into_iter().collect();
     recorded_eips.sort();
 
-    let debug_data = pdb::find_debug_data(&base_path);
+    let debug_data = pdb::find_debug_data(&base_path, cli.msq_depth.unwrap_or(100));
     let lines = debug_data.unwrap().offsets;
     let mut i = 0;
     let mut cur_hits = 0;

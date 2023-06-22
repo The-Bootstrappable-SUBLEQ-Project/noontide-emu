@@ -41,6 +41,10 @@ struct Cli {
         help = "Record processor EIPs into a file, which can later be analyzed with noontide-perf"
     )]
     record_path: Option<String>,
+
+    #[arg(long)]
+    #[arg(help = "Hide msq implementation details at and below this depth")]
+    msq_depth: Option<usize>,
 }
 
 fn main() {
@@ -54,7 +58,7 @@ fn main() {
     let data = std::fs::read(bin_path).unwrap();
     mem[..data.len()].copy_from_slice(&data);
 
-    let debug_data = pdb::find_debug_data(&base_path);
+    let debug_data = pdb::find_debug_data(&base_path, cli.msq_depth.unwrap_or(100));
     let record_eips = cli.record_path.is_some();
     let mut recorded_eips: HashMap<u64, u64> = HashMap::new();
 

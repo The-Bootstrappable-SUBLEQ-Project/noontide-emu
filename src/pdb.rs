@@ -112,7 +112,36 @@ pub fn parse_lsq_file(inp: &str) -> DebugData {
     ret
 }
 
-pub fn find_debug_data(base_path: &str) -> Option<DebugData> {
+pub fn hide_msq_details(debug_data: DebugData, msq_depth: usize) -> DebugData {
+    let mut ret: DebugData = DebugData {
+        offsets: Vec::new(),
+    };
+
+    let match_begin = format!("rem MSQ_START {msq_depth} ");
+    let match_end = format!("rem MSQ_END {msq_depth} ");
+
+    let mut it = debug_data.offsets.iter().peekable();
+    while it.peek().is_some() {
+        let line = it.next().unwrap();
+        if !line.1.starts_with(&match_begin) {
+            ret.offsets.push(line.to_owned());
+            continue;
+        }
+
+        let msq_line = line.1[match_begin.len()..].to_owned();
+        ret.offsets.push((line.0, msq_line));
+
+        while it.peek().is_some() {
+            if it.next().unwrap().1.starts_with(&match_end) {
+                break;
+            }
+        }
+    }
+
+    ret
+}
+
+pub fn find_debug_data(base_path: &str, msq_depth: usize) -> Option<DebugData> {
     let mut debug_data: Option<DebugData> = None;
     for ext in ["hex0", "hex1", "hex2"] {
         let mut hex_path_str = base_path.to_owned();
@@ -130,7 +159,10 @@ pub fn find_debug_data(base_path: &str) -> Option<DebugData> {
     lsq_path_str.push_str(".lsq");
     let lsq_path = std::path::Path::new(&lsq_path_str);
     if lsq_path.exists() {
-        debug_data = Some(parse_lsq_file(&std::fs::read_to_string(lsq_path).unwrap()));
+        debug_data = Some(hide_msq_details(
+            parse_lsq_file(&std::fs::read_to_string(lsq_path).unwrap()),
+            msq_depth,
+        ));
     }
 
     debug_data
