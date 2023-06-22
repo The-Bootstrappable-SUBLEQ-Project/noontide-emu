@@ -32,6 +32,7 @@ fn main() {
     let debug_data = pdb::find_debug_data(&base_path);
     let lines = debug_data.unwrap().offsets;
     let mut i = 0;
+    let mut cur_hits = 0;
     let mut total_hits = 0;
     let mut hits_per_line: Vec<(u64, String)> = Vec::new();
     for record in recorded_eips {
@@ -42,12 +43,12 @@ fn main() {
         }
 
         while i + 1 != lines.len() && lines[i + 1].0 <= record.0 {
-            hits_per_line.push((0, lines[i].1.clone()));
+            hits_per_line.push((cur_hits, lines[i].1.clone()));
+            cur_hits = 0;
             i += 1;
         }
 
-        hits_per_line.push((record.1, lines[i].1.clone()));
-        i += 1;
+        cur_hits += record.1;
     }
 
     for (hits, line) in hits_per_line {
